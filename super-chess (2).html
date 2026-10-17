@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Super Chess 16×16</title>
+<style>
+:root{--bg:#f2efe8;--panel:#fff;--ink:#222;--l:#ead9b5;--d:#a98358;--wall:#3b3b3b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171c;--panel:#20232b;--ink:#e8e8e8}}
+:root[data-theme="dark"]{--bg:#15171c;--panel:#20232b;--ink:#e8e8e8}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;background:var(--panel);border-bottom:1px solid #8884}
+h1{font-size:1.05rem;margin:0 8px 0 0}
+#status{font-weight:700;flex:1;min-width:160px}
+button{background:#5b6cf0;color:#fff;border:0;border-radius:6px;padding:6px 12px;font-size:.9rem;cursor:pointer}
+select{padding:6px;border-radius:6px;font-size:.9rem}button:disabled,select:disabled{opacity:.45;cursor:not-allowed}button.alt{background:#7778}
+#main{flex:1;display:flex;justify-content:flex-start;min-height:0}#hist{flex:0 0 260px;width:260px;box-sizing:border-box;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid #8884;padding:8px 10px;min-height:0}#hist h3{margin:0 0 6px;font-size:.95rem}#hl{flex:1;overflow:auto;font-size:.85rem}.hr{display:grid;grid-template-columns:26px 1fr 1fr;gap:4px;padding:3px 0;border-bottom:1px solid #8883}.hn{opacity:.6}.hr.last span:not(.hn){font-weight:700}@media (max-width:700px){#main{flex-direction:column}#wrap{max-width:100%;flex:1}#hist{flex:none;width:auto;height:28%;border-left:0;border-top:1px solid #8884}}
+#wrap{flex:0 1 auto;max-width:calc(100% - 260px);overflow:auto;min-height:0}
+canvas{display:block;max-width:none}
+#rules{display:none;max-height:62%;overflow:auto;padding:10px 14px;background:var(--panel);border-top:1px solid #8884;font-size:.86rem;line-height:1.45}
+#rules.show{display:block}
+#rules h3{margin:10px 0 4px;font-size:.95rem}#rules ul{margin:0;padding-left:18px}#rules table{border-collapse:collapse;width:100%}#rules td{border-top:1px solid #8884;padding:4px 6px;vertical-align:top}#rules td.g{width:1.6em;text-align:center}
+#rules .g{font-size:1.1rem}
+#log{font-size:.78rem;opacity:.75;padding:3px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dlg{display:none;position:fixed;inset:0;background:#0009;z-index:50;align-items:center;justify-content:center;padding:16px}
+#dlg.show{display:flex}
+#dlg .box{background:var(--panel);color:var(--ink);border-radius:12px;padding:20px;max-width:340px;width:100%;box-shadow:0 8px 30px #0008}
+#dlg h2{margin:0 0 8px;font-size:1.1rem}
+#dlg p{margin:0 0 16px;line-height:1.4}
+#dlg .row{display:flex;gap:10px;justify-content:flex-end}
+#dlg button.no{background:#7778}
+#dlg button.yes{background:#d33}
+</style>
+</head>
+<body>
+<header>
+<h1>♛ Super Chess 16×16</h1>
+<div id="status"></div>
+<button class="alt" id="zo">−</button><button class="alt" id="zi">+</button>
+<select id="lv" title="Computer level"><option value="1">Easy</option><option value="2">Normal</option><option value="3" selected>Hard</option><option value="4">Expert</option></select><button class="alt" id="pz" style="display:none">▶ Start</button><button class="alt" id="md">vs Computer</button><button class="alt" id="rl">Rules</button><button id="nw">New game</button>
+</header>
+<div id="log"></div>
+<div id="main"><div id="wrap"><canvas id="cv"></canvas></div><aside id="hist"><h3>Move history <small style="font-weight:400;opacity:.7">(White | Black)</small></h3><div id="hl"></div></aside></div>
+<div id="rules">
+<h3>1. Basics</h3>
+<ul>
+<li><b>Board:</b> 16×16. Each side has <b>4 rows</b>: two rows of pieces (32 pieces) and two rows of pawns (32 pawns). White is at the bottom and moves first.</li>
+<li><b>Modes</b> (press the mode button before the first move; each press switches to the next one): <b>vs Computer</b> (you are White, the computer is Black), <b>2 Players</b> on one device, and <b>Computer vs Computer</b>, where you watch two computers play each other. In Computer vs Computer, press <b>▶ Start</b> to begin, and use <b>⏸ Pause</b> / <b>▶ Resume</b> any time. If neither side wins after 300 moves it is declared a draw.</li>
+<li><b>Computer level:</b> choose <b>Easy</b> (mostly random moves), <b>Normal</b>, <b>Hard</b> or <b>Expert</b> (searches deepest, up to about 9 seconds per move, and hunts the King). The level applies to every computer player. Normal and above also judge attack and defence: they go after undefended pieces, move or protect their own pieces that are under attack, build pressure on your King to set up checkmate, and (Hard and Expert) search extra moves whenever a King is in danger so they spot mating attacks and escape them.</li>
+<li><b>Locked options:</b> once the first move is played, the level and the mode switch are disabled. Press <b>New game</b> and confirm the warning to reset and choose them again. While the computer thinks you can still scroll the board.</li>
+<li><b>Your turn:</b> click one of your pieces, then a highlighted square. <span style="color:#2a9d3a">Green dot</span> = move, <span style="color:#d33">red square</span> = capture. Only legal moves are shown.</li>
+<li><b>Mirrored army:</b> except the King, Queen and Pawns, <b>every piece type appears exactly twice</b> per side: one on the left half and one on the right half, always on <b>opposite colours</b> of squares (so there is one light-square and one dark-square copy, which matters for the Camel and Bishop).</li>
+<li><b>Back row, left to right:</b> Rook, Knight, Bishop, Chancellor, Unicorn, Guardian, Archbishop, Queen, King, Archbishop, Guardian, Unicorn, Chancellor, Bishop, Knight, Rook.</li>
+<li><b>Second row, left to right:</b> Amazon, Camel, Serpent, Vampire, Centaur, Fortress, Oracle, Rhino, Rhino, Oracle, Fortress, Centaur, Vampire, Serpent, Camel, Amazon.</li>
+</ul>
+<h3>2. Check, checkmate and stalemate</h3>
+<ul>
+<li>A King is in <b>check</b> when an enemy piece could capture it next move. The King's square turns red and the status bar shows <b>CHECK!</b></li>
+<li>You <b>must resolve a check</b> on your very move: move the King to a safe square, capture the attacker, or block the line of a sliding attacker. Leaps cannot be blocked. You can never make a move that leaves your own King in check.</li>
+<li><b>Checkmate:</b> you are in check and have no legal move, so you lose. <b>Stalemate:</b> you are not in check but have no legal move, so the game is a draw.</li>
+<li>No castling and no en passant.</li>
+</ul>
+<h3>3. Other global rules</h3>
+<ul>
+<li><b>Promotion:</b> a Pawn that reaches the far rank becomes an <b>Amazon</b> automatically.</li>
+<li><b>Guardian shield:</b> any piece (except the King) in the 8 squares around a friendly 🛡️ Guardian <b>cannot be captured</b>. The Guardian itself is not shielded by other Guardians, so attack it directly first.</li>
+<li><b>Blocking:</b> sliding pieces are stopped by any piece. Knight-type and Camel leaps ignore everything in between.</li>
+</ul>
+<h3>4. Standard pieces</h3>
+<table>
+<tr><td class="g">♚</td><td><b>King</b>: 1 square in any direction, never into check.</td></tr>
+<tr><td class="g">♛</td><td><b>Queen</b>: slides any distance in 8 directions.</td></tr>
+<tr><td class="g">♜</td><td><b>Rook</b>: slides any distance orthogonally.</td></tr>
+<tr><td class="g">♝</td><td><b>Bishop</b>: slides any distance diagonally.</td></tr>
+<tr><td class="g">♞</td><td><b>Knight</b>: L-leap (1,2), ignores blockers.</td></tr>
+<tr><td class="g">♟</td><td><b>Pawn</b>: 1 square forward, or 1 or 2 on its first move (path must be clear). Captures diagonally forward only. Promotes to an Amazon.</td></tr>
+</table>
+<h3>5. Special pieces</h3>
+<table>
+<tr><td class="g">👑</td><td><b>Amazon</b> (Knight + Rook + Bishop = Knight + Queen): all Queen moves plus Knight leaps. The strongest piece; each side has two.</td></tr>
+<tr><td class="g">🏰</td><td><b>Chancellor</b> (Knight + Rook): Rook slides plus Knight leaps.</td></tr>
+<tr><td class="g">⛪</td><td><b>Archbishop</b> (Knight + Bishop): Bishop slides plus Knight leaps.</td></tr>
+<tr><td class="g">🦄</td><td><b>Unicorn</b> (Knight + Camel): Knight leaps (1,2) plus Camel leaps (1,3).</td></tr>
+<tr><td class="g">🐪</td><td><b>Camel</b>: leaps (1,3) in 8 directions, ignores blockers. It always stays on the same colour of square.</td></tr>
+<tr><td class="g">🐍</td><td><b>Serpent</b>: moves up to 4 steps through <i>empty</i> squares, alternating one straight step and one diagonal step (it may start with either kind). It can stop on any empty square along the way, or capture an enemy at the end of any step. It cannot pass through pieces. Each side has two.</td></tr>
+<tr><td class="g">🧛</td><td><b>Vampire</b>: slides like a Queen (any distance, 8 directions). Instead of moving, it can <b>convert</b> an enemy <b>Pawn</b> within 2 squares (only Pawns, never other pieces): the Pawn stays where it is but joins your side and now advances in your direction. A conversion uses your whole turn, and a Pawn shielded by an enemy Guardian can't be converted. Each side has two.</td></tr>
+<tr><td class="g">🛡️</td><td><b>Guardian</b>: steps 1 square in any direction (move or capture) and shields adjacent friendly pieces (not the King).</td></tr>
+<tr><td class="g">🐴</td><td><b>Centaur</b> (Knight + King): jumps like a Knight, <i>or</i> steps 1 square in any direction.</td></tr>
+<tr><td class="g">🏯</td><td><b>Fortress</b> (Rook + 1 diagonal step): slides like a Rook, <i>or</i> steps 1 square diagonally.</td></tr>
+<tr><td class="g">🔮</td><td><b>Oracle</b> (Bishop + 1 straight step): slides like a Bishop, <i>or</i> steps 1 square up, down, left or right.</td></tr>
+<tr><td class="g">🦏</td><td><b>Rhino</b> (Rook + Camel): slides like a Rook, <i>or</i> leaps like a Camel (1 square one way and 3 the other, jumping over pieces).</td></tr>
+</table>
+<h3>6. Tips</h3>
+<ul>
+<li>Pawns in the second row can't move until the front pawn in front of them has moved.</li>
+<li>Keep your Guardian near your important pieces, and protect the Guardian too.</li>
+<li>Zoom with <b>+ / −</b> and drag to scroll the board.</li>
+</ul>
+</div>
+<div id="dlg"><div class="box"><h2>Start a new game?</h2><p>Warning: the current game will end and the board will reset. You will then be able to choose the difficulty level and vs Computer / 2 Players again.</p><div class="row"><button class="no" id="dno">Cancel</button><button class="yes" id="dyes">Yes, reset game</button></div></div></div>
+<script>
+const N=16,G={K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',D:'🐉',H:'👻',C:'🏰',A:'⛪',Z:'🐪',T:'🗿',W:'🧙',M:'👑',S:'🐍',L:'🔱',F:'🦅',G:'🛡️',V:'🧛',E:'🪞',X:'🗡️',U:'🦄',Y:'🐴',O:'🏯',I:'🔮',J:'🦏'};
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+let kc=null,res='',hist=[],busy=false,aiTok=0,lastY=0,mode=0,paused=false,S=Math.max(26,Math.min(52,Math.floor((innerWidth-6)/16))),bd,turn,ply,over,sel,mv,last;
+const O=[[1,0],[-1,0],[0,1],[0,-1]],DG=[[1,1],[1,-1],[-1,1],[-1,-1]],A8=O.concat(DG);
+const inb=(y,x)=>y>=0&&x>=0&&y<N&&x<N;
+function init(){
+ aiTok++;busy=false;paused=(mode===2);hist=[];
+ bd=Array.from({length:N},()=>Array(N).fill(null));
+ const BACK='RNBCUGAQKAGUCBNR'.split(''),SEC='MZSVYOIJJIOYVSZM'.split('');
+ for(let c=0;c<N;c++){
+  bd[0][c]={t:BACK[c],p:1};bd[1][c]={t:SEC[c],p:1};bd[2][c]={t:'P',p:1};bd[3][c]={t:'P',p:1};
+  bd[N-1][c]={t:BACK[c],p:0};bd[N-2][c]={t:SEC[c],p:0};bd[N-3][c]={t:'P',p:0};bd[N-4][c]={t:'P',p:0}}
+ kc=null;res='';
+ turn=0;ply=0;over=false;sel=null;mv=[];last='';
+ draw();ui();
+ const w=document.getElementById('wrap');w.scrollTop=w.scrollHeight;w.scrollLeft=(w.scrollWidth-w.clientWidth)/2;
+}
+function gen(r,c){
+ const pc=bd[r][c],p=pc.p,out=[];
+ let ly=0,lx=0;const at=(y,x)=>{ly=y;lx=x;return bd[y][x]};
+ const prot=(y,x)=>{const q=bd[y][x];if(q.t==='G'||q.t==='K')return false;for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const yy=y+a,xx=x+b;if((a||b)&&inb(yy,xx)){const n=bd[yy][xx];if(n&&n.t==='G'&&n.p===q.p)return true}}return false};
+ const foe=t=>t&&t.p!==undefined&&(DEF||(t.p!==p&&!prot(ly,lx)));
+ const step=(y,x)=>{
+  if(!inb(y,x))return false;const t=at(y,x);
+  if(!t){out.push([y,x,'m']);return true}
+  if(foe(t))out.push([y,x,'x']);return false};
+ const slide=(ds,m)=>ds.forEach(([dy,dx])=>{for(let k=1;k<=m;k++)if(!step(r+dy*k,c+dx*k))break});
+ const leap=l=>l.forEach(([a,b])=>[[a,b],[a,-b],[-a,b],[-a,-b],[b,a],[b,-a],[-b,a],[-b,-a]].forEach(([dy,dx])=>step(r+dy,c+dx)));
+ switch(pc.t){
+ case 'Y':leap([[1,2]]);slide(A8,1);break;
+ case 'O':slide(O,N);slide(DG,1);break;
+ case 'I':slide(DG,N);slide(O,1);break;
+ case 'J':slide(O,N);leap([[1,3]]);break;
+ case 'C':slide(O,N);leap([[1,2]]);break;
+ case 'A':slide(DG,N);leap([[1,2]]);break;
+ case 'U':leap([[1,2],[1,3]]);break;
+ case 'P':{const d=p?1:-1,m=pc.mv?1:2;
+  for(let k=1;k<=m;k++){const y=r+d*k;if(!inb(y,c)||at(y,c))break;out.push([y,c,'m'])}
+  [-1,1].forEach(dx=>{const y=r+d,x=c+dx;if(inb(y,x)&&foe(at(y,x)))out.push([y,x,'x'])});break}
+ case 'K':case 'G':slide(A8,1);break;
+ case 'X':{const d=p?1:-1;A8.forEach(([dy,dx])=>{const y=r+dy,x=c+dx;if(inb(y,x)&&!at(y,x))out.push([y,x,'m'])});[-1,1].forEach(dx=>{const y=r+d,x=c+dx;if(inb(y,x)&&foe(at(y,x)))out.push([y,x,'x'])});break}
+ case 'M':slide(A8,N);leap([[1,2]]);break;
+ case 'L':{const d=p?1:-1;slide([[d,0],[d,1],[d,-1]],8);slide([[0,1],[0,-1]],1);break}
+ case 'F':leap([[2,2],[2,0]]);slide(O,1);break;
+ case 'E':slide(O,2);step(r,N-1-c);break;
+ case 'S':{const seen=new Set();
+  const walk=(y,x,k,o)=>{if(k===4)return;(o?O:DG).forEach(([dy,dx])=>{const ny=y+dy,nx=x+dx;if(!inb(ny,nx))return;
+   const t=at(ny,nx),key=ny*N+nx;
+   if(!t){if(!seen.has(key)){seen.add(key);out.push([ny,nx,'m'])}walk(ny,nx,k+1,!o)}
+   else if(foe(t)&&!seen.has(key)){seen.add(key);out.push([ny,nx,'x'])}})};
+  walk(r,c,0,true);walk(r,c,0,false);break}
+ case 'V':slide(A8,N);
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const y=r+dy,x=c+dx;
+   if((dy||dx)&&inb(y,x)){const t=at(y,x);if(t&&t.t==='P'&&foe(t))out.push([y,x,'c'])}}break;
+ case 'Q':slide(A8,N);break;
+ case 'R':slide(O,N);break;
+ case 'B':slide(DG,N);break;
+ case 'N':leap([[1,2]]);break;
+ case 'Z':leap([[1,3]]);break;
+ case 'T':slide(A8,3);break;
+ case 'D':leap([[1,2]]);slide(DG,3);break;
+ case 'H':slide(A8,1);
+  for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){
+   if(Math.max(Math.abs(dy),Math.abs(dx))<2)continue;
+   const y=r+dy,x=c+dx;if(inb(y,x)&&!at(y,x))out.push([y,x,'m'])}break;
+ case 'C':
+  O.forEach(([dy,dx])=>{let k=1;
+   while(inb(r+dy*k,c+dx*k)&&!at(r+dy*k,c+dx*k)){out.push([r+dy*k,c+dx*k,'m']);k++}
+   if(!inb(r+dy*k,c+dx*k))return;k++;
+   while(inb(r+dy*k,c+dx*k)&&!at(r+dy*k,c+dx*k))k++;
+   if(inb(r+dy*k,c+dx*k)&&foe(at(r+dy*k,c+dx*k)))out.push([r+dy*k,c+dx*k,'x'])});break;
+ case 'A':
+  A8.forEach(([dy,dx])=>{const y=r+dy,x=c+dx;if(inb(y,x)&&!at(y,x))out.push([y,x,'m'])});
+  [[3,0],[-3,0],[0,3],[0,-3],[2,2],[2,-2],[-2,2],[-2,-2]].forEach(([dy,dx])=>{
+   const y=r+dy,x=c+dx;if(inb(y,x)&&foe(at(y,x)))out.push([y,x,'s'])});break;
+ case 'W':
+  slide(A8,1);
+  for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
+   const y=r+dy,x=c+dx;if((dy||dx)&&inb(y,x)){const t=at(y,x);if(t&&t.p===p)out.push([y,x,'w'])}}break;
+ }
+ return out;
+}
+const nm=(y,x)=>String.fromCharCode(97+x)+(N-y);
+function act(r,c,m){
+ const pc=bd[sel[0]][sel[1]],[y,x,k]=m,from=nm(sel[0],sel[1]);
+ let msg=(turn?'Black ':'White ')+(G[pc.t]||pc.t)+' '+from;
+ if(k==='m'||k==='x'){
+  const cap=bd[y][x];bd[y][x]=pc;bd[sel[0]][sel[1]]=null;pc.mv=true;
+  msg+=(k==='x'?' × ':' → ')+nm(y,x);
+  if(k==='x'&&cap.t==='K'){over=true;msg+=' — KING CAPTURED!'}
+  if((pc.t==='P'||pc.t==='X')&&y===(pc.p?N-1:0)){pc.t='M';msg+=' =Amazon'}
+ }else if(k==='s'){const cap=bd[y][x];bd[y][x]=null;msg+=' shoots '+nm(y,x);if(cap.t==='K'){over=true;msg+=' — KING SLAIN!'}}
+ else if(k==='c'){bd[y][x].p=pc.p;bd[y][x].mv=true;msg+=' converts '+nm(y,x)}
+ else{const o=bd[y][x];bd[y][x]=pc;bd[sel[0]][sel[1]]=o;pc.mv=true;msg+=' ⇄ '+nm(y,x)}
+ ply++;turn^=1;
+ const chk=attacked(turn);kc=chk?kingPos(turn):null;
+ if(!hasLegal(turn)){over=true;res=chk?'mate':'stale';msg+=chk?' — CHECKMATE!':' — stalemate'}else if(chk)msg+=' — check!';
+ if(!over&&mode===2&&ply>=300){over=true;res='draw'}
+ hist.push([/^White/.test(msg)?0:1,msg.replace(/^(White|Black) /,'')]);
+ last=msg;sel=null;mv=[];draw();ui();
+ if(isAI(turn)&&!over&&!paused)setTimeout(aiMove,mode===2?350:80);
+}
+const VAL={Y:5.5,O:7,I:5.5,J:7,U:5,P:1,X:2,N:3,B:3,Z:3,F:3,A:6.5,W:4,V:11,G:4,E:5,L:5,S:5,C:8,D:5,H:5,R:5,T:6,Q:9,M:12,K:1000};
+function sim(y0,x0,[y,x,k]){const pc=bd[y0][x0],tg=bd[y][x],u={y0,x0,y,x,pc,tg,mv:pc.mv,pt:pc.t,tp:tg&&tg.p};
+ if(k==='m'||k==='x'){bd[y][x]=pc;bd[y0][x0]=null;pc.mv=true;if((pc.t==='P'||pc.t==='X')&&y===(pc.p?N-1:0))pc.t='M'}
+ else if(k==='s')bd[y][x]=null;
+ else if(k==='c')tg.p=pc.p;
+ else{bd[y][x]=pc;bd[y0][x0]=tg;pc.mv=true}
+ return u}
+function undo(u){bd[u.y0][u.x0]=u.pc;bd[u.y][u.x]=u.tg;u.pc.mv=u.mv;u.pc.t=u.pt;if(u.tg&&u.tp!==undefined)u.tg.p=u.tp}
+function gain(m){const t=bd[m[0]][m[1]];return m[2]==='x'||m[2]==='s'?VAL[t.t]:m[2]==='c'?VAL[t.t]*2:0}
+function bestReply(p){let b=0;
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){const t=bd[y][x];
+  if(t&&t.p===p)for(const m of gen(y,x)){const g=gain(m);if(g>b)b=g}}
+ return b}
+let level=3,deadline=0,aborted=false,INNER=14,lastAI=[null,null];
+const LV={1:[1,600,.9,20,10],2:[2,1500,.25,30,12],3:[4,3500,.08,40,14],4:[12,9000,.02,60,18]};
+function kingsAt(){const k=[null,null];
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){const t=bd[y][x];if(t&&t.t==='K')k[t.p]=[y,x]}
+ return k}
+function evalB(p){let e=0;const k=kingsAt();
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){const t=bd[y][x];if(!t||t.p===undefined)continue;
+  let v=t.t==='K'?0:VAL[t.t];const adv=t.p?y:N-1-y;
+  if(t.t==='P'||t.t==='X')v+=adv*.06;else if(t.t!=='K')v+=Math.min(adv,6)*.04;
+  v-=Math.abs(x-(N-1)/2)*.004;
+  if(t.t!=='K'&&VAL[t.t]>=3){const ek=k[1-t.p];if(ek)v+=(16-Math.max(Math.abs(ek[0]-y),Math.abs(ek[1]-x)))*.014}
+  e+=t.p===p?v:-v}
+ return e}
+function moves(p,cap){const c=[],k=kingsAt(),ek=k[1-p];
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){const t=bd[y][x];
+  if(t&&t.p===p)for(const m of gen(y,x)){const g=gain(m);if(cap&&!g)continue;
+   let sc=g*10-(g?VAL[t.t]:0)*.3;
+   if(m[2]==='m'){sc+=(p?m[0]-y:y-m[0])*.05;
+    if(ek&&VAL[t.t]>=3)sc+=(Math.max(Math.abs(ek[0]-y),Math.abs(ek[1]-x))-Math.max(Math.abs(ek[0]-m[0]),Math.abs(ek[1]-m[1])))*.1}
+   if((t.t==='P'||t.t==='X')&&m[0]===(p?N-1:0))sc+=90;
+   c.push([sc,y,x,m,g])}}
+ return c.sort((a,b)=>b[0]-a[0])}
+function qs(p,d,al,be){
+ if(Date.now()>deadline){aborted=true;return 0}
+ const st=evalB(p);if(d===0)return st;
+ const c=moves(p,true);
+ if(c.length&&c[0][4]>=1000)return 99000+d;
+ if(st>=be)return st;if(st>al)al=st;
+ for(const [,y,x,m] of c.slice(0,6)){
+  const u=sim(y,x,m);const v=-qs(1-p,d-1,-be,-al);undo(u);
+  if(aborted)return 0;
+  if(v>=be)return v;if(v>al)al=v}
+ return al}
+let DEF=false,EXT=false,TW=0;
+function amap(p){const att=new Float32Array(N*N).fill(99),def=new Uint8Array(N*N),cnt=new Uint8Array(N*N),sq=new Uint8Array(N*N);
+ DEF=true;
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){const t=bd[y][x];if(!t||t.p!==p)continue;
+  const v=t.t==='K'?2.5:VAL[t.t];
+  if(t.t==='P'||t.t==='X'){const d=p?1:-1;[-1,1].forEach(dx=>{if(inb(y+d,x+dx)){sq[(y+d)*N+x+dx]=1;const tg=bd[y+d][x+dx];if(tg){if(tg.p===p)def[(y+d)*N+x+dx]++;else{cnt[(y+d)*N+x+dx]++;if(v<att[(y+d)*N+x+dx])att[(y+d)*N+x+dx]=v}}}});continue}
+  for(const m of gen(y,x)){const i=m[0]*N+m[1];
+   if(m[2]==='m'){sq[i]=1;continue}
+   if(m[2]!=='x'&&m[2]!=='s')continue;
+   sq[i]=1;const tg=bd[m[0]][m[1]];
+   if(tg.p===p)def[i]++;else{cnt[i]++;if(v<att[i])att[i]=v}}}
+ DEF=false;return{att,def,cnt,sq}}
+function threatEval(me){const opp=1-me,A=amap(me),B=amap(opp);let e=0;
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){const t=bd[y][x];if(!t||t.p===undefined)continue;
+  const i=y*N+x,v=t.t==='K'?0:VAL[t.t];
+  if(t.p===opp){if(A.cnt[i]){if(!B.def[i])e+=v*.5;else if(A.att[i]<v)e+=(v-A.att[i])*.4}}
+  else if(B.cnt[i]){if(!A.def[i])e-=v*.6;else if(B.att[i]<v)e-=(v-B.att[i])*.5}}
+ const k=kingsAt(),ok=k[opp],mk=k[me];
+ if(ok){let esc=0,hot=0;
+  for(const [dy,dx] of A8){const y=ok[0]+dy,x=ok[1]+dx;if(!inb(y,x))continue;const t=bd[y][x];if(t&&t.p===opp)continue;esc++;if(A.sq[y*N+x])hot++}
+  e+=hot*.25;if(A.cnt[ok[0]*N+ok[1]])e+=1.2+(esc===hot?3:0)}
+ if(mk){let hot=0;for(const [dy,dx] of A8){const y=mk[0]+dy,x=mk[1]+dx;if(inb(y,x)&&B.sq[y*N+x])hot++}e-=hot*.2}
+ return e}
+function* search(p,d,al,be,ex=0){
+ if(Date.now()>deadline){aborted=true;return 0}
+ if(Date.now()-lastY>30){lastY=Date.now();yield}
+ if(d===0){if(EXT&&ex<3){const o=moves(1-p,true);if(o.length&&o[0][4]>=1000){d=1;ex++}}if(d===0)return qs(p,3,al,be)}
+ const c=moves(p);
+ if(!c.length)return evalB(p);
+ for(const q of c)if(q[4]>=1000)return 99000+d;
+ let wide=false;
+ {const o=moves(1-p,true);
+  if(o.length){if(o[0][4]>=1000)wide=true;
+   const att=new Map();for(const q of o){const k=q[3][0]*N+q[3][1];if(!att.has(k))att.set(k,q[4])}
+   for(const q of c){const k=q[1]*N+q[2];if(att.has(k))q[0]+=att.get(k)*.8}
+   c.sort((a,b)=>b[0]-a[0])}}
+ let best=-1e9;
+ for(const [,y,x,m] of c.slice(0,wide?c.length:d>=3?INNER:Math.min(INNER,10))){
+  const u=sim(y,x,m);const v=-(yield* search(1-p,d-1,-be,-al,ex));undo(u);
+  if(aborted)return 0;
+  if(v>best)best=v;if(v>al)al=v;if(al>=be)break}
+ return best}
+const isAI=p=>mode===2||(mode===0&&p===1);
+function locked(){return ply>0||busy||(mode===2&&!paused)}
+function aiMove(){
+ if(!isAI(turn)||over||paused)return;
+ const tok=++aiTok,g=aiGen(tok);
+ const step=()=>{if(tok!==aiTok)return;const r=g.next();if(!r.done)setTimeout(step,0)};
+ setTimeout(step,30)}
+function* aiGen(tok){
+ busy=true;const me=turn,opp=1-me;
+ const c=moves(me);if(!c.length){busy=false;return}
+ if(level===1){
+  const L=legalAll(me);if(!L.length){busy=false;return}
+  const caps=L.filter(q=>q[4]>0),pool=caps.length&&Math.random()<.2?caps:L,pick=pool[Math.floor(Math.random()*pool.length)];
+  busy=false;if(tok!==aiTok||turn!==me||over)return;
+  sel=[pick[1],pick[2]];act(pick[3][0],pick[3][1],pick[3]);return}
+ const [maxD,ms,noise,rootN,inner]=LV[level];INNER=inner;EXT=level>=3;TW=[0,0,.15,.3,.45][level];
+ let best=c[0];
+ if(c[0][4]<1000){
+  deadline=Date.now()+ms;aborted=false;
+  const o0=moves(opp,true),danger=o0.length&&o0[0][4]>=1000;
+  let order=c.slice(0,danger?c.length:rootN);
+  for(let d=1;d<=maxD;d++){
+   let al=-1e9,cur=null,scored=[];
+   for(const q of order){
+    const u=sim(q[1],q[2],q[3]);if(TW&&q[5]===undefined)q[5]=threatEval(me);
+    const la=lastAI[me],rev=la&&q[1]===la[2]&&q[2]===la[3]&&q[3][0]===la[0]&&q[3][1]===la[1]?.5:0;
+    const bz=(TW?TW*q[5]:0)-rev+Math.random()*noise;
+    const v=-(yield* search(opp,d-1,-1e9,-(al-bz)));undo(u);
+    if(aborted)break;
+    const vv=v+bz;scored.push([vv,q]);
+    if(vv>al){al=vv;cur=q}
+    if(v>=99000)break}
+   if(aborted||!cur)break;
+   best=cur;
+   if(al>=99000)break;
+   scored.sort((a,b)=>b[0]-a[0]);order=scored.map(z=>z[1]);
+  }
+ }
+
+ busy=false;if(tok!==aiTok||turn!==me||over)return;
+ if(!isLegal(best[1],best[2],best[3])){const L=legalAll(me);if(!L.length)return;best=L[Math.floor(Math.random()*L.length)]}
+ lastAI[me]=[best[1],best[2],best[3][0],best[3][1]];
+ sel=[best[1],best[2]];act(best[3][0],best[3][1],best[3]);
+}
+document.getElementById('lv').onchange=e=>{if(locked()){e.target.value=level;return}level=+e.target.value};
+const MODES=['vs Computer','2 Players','Computer vs Computer'];
+document.getElementById('md').onclick=e=>{if(locked())return;mode=(mode+1)%3;paused=(mode===2);e.target.textContent=MODES[mode];sel=null;mv=[];draw();ui()};
+document.getElementById('pz').onclick=()=>{if(mode!==2||over)return;paused=!paused;ui();if(!paused&&!busy)aiMove()};
+function kingPos(p){for(let y=0;y<N;y++)for(let x=0;x<N;x++){const t=bd[y][x];if(t&&t.t==='K'&&t.p===p)return[y,x]}return null}
+function attacked(p){const k=kingPos(p);if(!k)return false;
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){const t=bd[y][x];
+  if(t&&t.p===1-p)for(const m of gen(y,x))if(m[0]===k[0]&&m[1]===k[1]&&(m[2]==='x'||m[2]==='s'))return true}
+ return false}
+function isLegal(y,x,m){const p=bd[y][x].p,u=sim(y,x,m),bad=attacked(p);undo(u);return !bad}
+function legal(y,x){return gen(y,x).filter(m=>isLegal(y,x,m))}
+function hasLegal(p){for(let y=0;y<N;y++)for(let x=0;x<N;x++){const t=bd[y][x];if(t&&t.p===p)for(const m of gen(y,x))if(isLegal(y,x,m))return true}return false}
+function legalAll(p){return moves(p).filter(q=>isLegal(q[1],q[2],q[3]))}
+function renderHist(){let h='';
+ for(let i=0;i<hist.length;i+=2){const w=hist[i],b=hist[i+1],l=(i>=hist.length-2)?' last':'';
+  h+='<div class="hr'+l+'"><span class="hn">'+(i/2+1)+'.</span><span>'+w[1]+'</span><span>'+(b?b[1]:'')+'</span></div>'}
+ const el=document.getElementById('hl');el.innerHTML=h||'<i>No moves yet</i>';el.scrollTop=el.scrollHeight}
+function ui(){
+ renderHist();
+ document.getElementById('md').disabled=document.getElementById('lv').disabled=locked();
+ const pz=document.getElementById('pz');pz.style.display=mode===2&&!over?'':'none';pz.textContent=paused?(ply===0?'▶ Start':'▶ Resume'):'⏸ Pause';
+ document.getElementById('status').textContent=over?(res==='draw'?'🤝 Draw: move limit reached':res==='stale'?'🤝 Stalemate: draw':'🏆 Checkmate! '+(turn?'White':'Black')+' wins!'):((turn?'⚫ Black':'⚪ White')+(isAI(turn)&&!paused?' (computer thinking…)':'')+(mode===2&&paused?' · paused':'')+' to move · ply '+(ply+1)+(kc?' · ⚠️ CHECK!':''));
+ document.getElementById('log').textContent=last;
+}
+cv.addEventListener('click',e=>{
+ if(over||isAI(turn))return;
+ const b=cv.getBoundingClientRect(),x=Math.floor((e.clientX-b.left)/S),y=Math.floor((e.clientY-b.top)/S);
+ if(!inb(y,x))return;
+ if(sel){const m=mv.find(a=>a[0]===y&&a[1]===x);if(m){act(y,x,m);return}}
+ const t=bd[y][x];
+ if(t&&t.p===turn){sel=[y,x];mv=legal(y,x)}else{sel=null;mv=[]}
+ draw();
+});
+function draw(){
+ if(busy)return;
+ cv.width=cv.height=N*S;
+ const cs=getComputedStyle(document.documentElement);
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+  cx.fillStyle=(x+y)%2?'#a98358':'#ead9b5';cx.fillRect(x*S,y*S,S,S);
+  const t=bd[y][x];
+  if(t&&t.t==='#'){cx.fillStyle='#3b3b3b';cx.fillRect(x*S+3,y*S+3,S-6,S-6);cx.fillStyle='#777';cx.fillRect(x*S+3,y*S+3,S-6,5)}
+  else if(t){
+   cx.beginPath();cx.arc(x*S+S/2,y*S+S/2,S*.43,0,7);
+   cx.fillStyle=t.p?'#25272e':'#fbfbfb';cx.fill();cx.lineWidth=2;cx.strokeStyle=t.p?'#000':'#666';cx.stroke();
+   cx.font=(S*.56)+'px "Segoe UI Emoji","Apple Color Emoji",serif';cx.textAlign='center';cx.textBaseline='middle';
+   cx.fillStyle=t.p?'#f3f3f3':'#111';cx.fillText(G[t.t],x*S+S/2,y*S+S/2+S*.03)}
+ }
+ if(kc){cx.fillStyle='#ff000055';cx.fillRect(kc[1]*S,kc[0]*S,S,S);cx.strokeStyle='#e00';cx.lineWidth=3;cx.strokeRect(kc[1]*S+1.5,kc[0]*S+1.5,S-3,S-3)}
+ cx.strokeStyle='#0002';cx.lineWidth=1;
+ cx.font=(S*.22)+'px sans-serif';
+ if(sel){cx.strokeStyle='#ffd400';cx.lineWidth=3;cx.strokeRect(sel[1]*S+1.5,sel[0]*S+1.5,S-3,S-3)}
+ mv.forEach(([y,x,k])=>{
+  const col=k==='m'?'#2a9d3a':k==='x'?'#e02f2f':'#3a6cf0';
+  cx.fillStyle=col+'aa';cx.strokeStyle=col;cx.lineWidth=3;
+  if(k==='m'){cx.beginPath();cx.arc(x*S+S/2,y*S+S/2,S*.14,0,7);cx.fill()}
+  else cx.strokeRect(x*S+2,y*S+2,S-4,S-4)});
+}
+document.getElementById('zi').onclick=()=>{S=Math.min(72,S+6);draw()};
+document.getElementById('zo').onclick=()=>{S=Math.max(20,S-6);draw()};
+document.getElementById('nw').onclick=()=>{if(ply===0||over)init();else document.getElementById('dlg').classList.add('show')};
+document.getElementById('dno').onclick=()=>document.getElementById('dlg').classList.remove('show');
+document.getElementById('dyes').onclick=()=>{document.getElementById('dlg').classList.remove('show');init()};
+document.getElementById('rl').onclick=()=>document.getElementById('rules').classList.toggle('show');
+init();
+</script>
+</body>
+</html>
